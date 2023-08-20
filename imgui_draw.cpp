@@ -30,6 +30,7 @@ Index of this file:
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
 
+#include "glfw3native.h"
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
@@ -387,8 +388,8 @@ void ImDrawList::_ResetForNewFrame()
 {
     // Verify that the ImDrawCmd fields we want to memcmp() are contiguous in memory.
     IM_STATIC_ASSERT(IM_OFFSETOF(ImDrawCmd, ClipRect) == 0);
-    IM_STATIC_ASSERT(IM_OFFSETOF(ImDrawCmd, TextureId) == sizeof(ImVec4));
-    IM_STATIC_ASSERT(IM_OFFSETOF(ImDrawCmd, VtxOffset) == sizeof(ImVec4) + sizeof(ImTextureID));
+    IM_STATIC_ASSERT(IM_OFFSETOF(ImDrawCmd, TextureId) == sizeof(ImClipRect));
+    IM_STATIC_ASSERT(IM_OFFSETOF(ImDrawCmd, VtxOffset) == sizeof(ImClipRect) + sizeof(ImTextureID));
     if (_Splitter._Count > 1)
         _Splitter.Merge(this);
 
@@ -441,7 +442,7 @@ void ImDrawList::AddDrawCmd()
     draw_cmd.VtxOffset = _CmdHeader.VtxOffset;
     draw_cmd.IdxOffset = IdxBuffer.Size;
 
-    IM_ASSERT(draw_cmd.ClipRect.x <= draw_cmd.ClipRect.z && draw_cmd.ClipRect.y <= draw_cmd.ClipRect.w);
+    IM_ASSERT(draw_cmd.ClipRect.Rect.x <= draw_cmd.ClipRect.Rect.z && draw_cmd.ClipRect.Rect.y <= draw_cmd.ClipRect.Rect.w);
     CmdBuffer.push_back(draw_cmd);
 }
 
@@ -568,19 +569,20 @@ int ImDrawList::_CalcCircleAutoSegmentCount(float radius) const
 }
 
 // Render-level scissoring. This is passed down to your render function but not used for CPU-side coarse clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
-void ImDrawList::PushClipRect(const ImVec2& cr_min, const ImVec2& cr_max, bool intersect_with_current_clip_rect)
+void ImDrawList::PushClipRect(const ImVec2& cr_min, const ImVec2& cr_max, float clip_rounding, bool intersect_with_current_clip_rect)
 {
-    ImVec4 cr(cr_min.x, cr_min.y, cr_max.x, cr_max.y);
+    ImClipRect cr(ImVec4(cr_min.x, cr_min.y, cr_max.x, cr_max.y), clip_rounding);
     if (intersect_with_current_clip_rect)
     {
-        ImVec4 current = _CmdHeader.ClipRect;
-        if (cr.x < current.x) cr.x = current.x;
-        if (cr.y < current.y) cr.y = current.y;
-        if (cr.z > current.z) cr.z = current.z;
-        if (cr.w > current.w) cr.w = current.w;
+        ImClipRect current = _CmdHeader.ClipRect;
+        if (cr.Rect.x < current.Rect.x) cr.Rect.x = current.Rect.x;
+        if (cr.Rect.y < current.Rect.y) cr.Rect.y = current.Rect.y;
+        if (cr.Rect.z > current.Rect.z) cr.Rect.z = current.Rect.z;
+        if (cr.Rect.w > current.Rect.w) cr.Rect.w = current.Rect.w;
+        if (cr.Rounding < current.Rounding) cr.Rounding = current.Rounding;
     }
-    cr.z = ImMax(cr.x, cr.z);
-    cr.w = ImMax(cr.y, cr.w);
+    cr.Rect.z = ImMax(cr.Rect.x, cr.Rect.z);
+    cr.Rect.w = ImMax(cr.Rect.y, cr.Rect.w);
 
     _ClipRectStack.push_back(cr);
     _CmdHeader.ClipRect = cr;
@@ -595,7 +597,7 @@ void ImDrawList::PushClipRectFullScreen()
 void ImDrawList::PopClipRect()
 {
     _ClipRectStack.pop_back();
-    _CmdHeader.ClipRect = (_ClipRectStack.Size == 0) ? _Data->ClipRectFullscreen : _ClipRectStack.Data[_ClipRectStack.Size - 1];
+    _CmdHeader.ClipRect = (_ClipRectStack.Size == 0) ? ImClipRect(_Data->ClipRectFullscreen, 0.f) : _ClipRectStack.Data[_ClipRectStack.Size - 1];
     _OnChangedClipRect();
 }
 
@@ -1585,7 +1587,7 @@ void ImDrawList::AddText(const ImFont* font, float font_size, const ImVec2& pos,
 
     IM_ASSERT(font->ContainerAtlas->TexID == _CmdHeader.TextureId);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
 
-    ImVec4 clip_rect = _CmdHeader.ClipRect;
+    ImVec4 clip_rect = _CmdHeader.ClipRect.Rect;
     if (cpu_fine_clip_rect)
     {
         clip_rect.x = ImMax(clip_rect.x, cpu_fine_clip_rect->x);
@@ -1896,7 +1898,7 @@ void ImDrawData::ScaleClipRects(const ImVec2& fb_scale)
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
         {
             ImDrawCmd* cmd = &cmd_list->CmdBuffer[cmd_i];
-            cmd->ClipRect = ImVec4(cmd->ClipRect.x * fb_scale.x, cmd->ClipRect.y * fb_scale.y, cmd->ClipRect.z * fb_scale.x, cmd->ClipRect.w * fb_scale.y);
+            cmd->ClipRect = ImClipRect(ImVec4(cmd->ClipRect.Rect.x * fb_scale.x, cmd->ClipRect.Rect.y * fb_scale.y, cmd->ClipRect.Rect.z * fb_scale.x, cmd->ClipRect.Rect.w * fb_scale.y), cmd->ClipRect.Rounding);
         }
     }
 }

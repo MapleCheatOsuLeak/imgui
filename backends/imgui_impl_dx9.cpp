@@ -251,8 +251,8 @@ void ImGui_ImplDX9_RenderDrawData(ImDrawData* draw_data)
             else
             {
                 // Project scissor/clipping rectangles into framebuffer space
-                ImVec2 clip_min(pcmd->ClipRect.x - clip_off.x, pcmd->ClipRect.y - clip_off.y);
-                ImVec2 clip_max(pcmd->ClipRect.z - clip_off.x, pcmd->ClipRect.w - clip_off.y);
+                ImVec2 clip_min(pcmd->ClipRect.Rect.x - clip_off.x, pcmd->ClipRect.Rect.y - clip_off.y);
+                ImVec2 clip_max(pcmd->ClipRect.Rect.z - clip_off.x, pcmd->ClipRect.Rect.w - clip_off.y);
                 if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                     continue;
 

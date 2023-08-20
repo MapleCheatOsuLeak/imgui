@@ -388,8 +388,8 @@ CODE
              else
              {
                  // Project scissor/clipping rectangles into framebuffer space
-                 ImVec2 clip_min(pcmd->ClipRect.x - clip_off.x, pcmd->ClipRect.y - clip_off.y);
-                 ImVec2 clip_max(pcmd->ClipRect.z - clip_off.x, pcmd->ClipRect.w - clip_off.y);
+                 ImVec2 clip_min(pcmd->ClipRect.Rect.x - clip_off.x, pcmd->ClipRect.Rect.y - clip_off.y);
+                 ImVec2 clip_max(pcmd->ClipRect.Rect.z - clip_off.x, pcmd->ClipRect.Rect.w - clip_off.y);
                  if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                      continue;
 
@@ -401,7 +401,7 @@ CODE
                  //   - In a single viewport application, draw_data->DisplayPos == (0,0) and draw_data->DisplaySize == io.DisplaySize, but always use GetMainViewport()->Pos/Size instead of hardcoding those values.
                  //   - In the interest of supporting multi-viewport applications (see 'docking' branch on github),
                  //     always subtract draw_data->DisplayPos from clipping bounds to convert them to your viewport space.
-                 // - Note that pcmd->ClipRect contains Min+Max bounds. Some graphics API may use Min+Max, other may use Min+Size (size being Max-Min)
+                 // - Note that pcmd->ClipRect.Rect contains Min+Max bounds. Some graphics API may use Min+Max, other may use Min+Size (size being Max-Min)
                  MyEngineSetScissor(clip_min.x, clip_min.y, clip_max.x, clip_max.y);
 
                  // The texture for the draw call is specified by pcmd->GetTexID().
@@ -4881,14 +4881,14 @@ void ImGui::PushClipRect(const ImVec2& clip_rect_min, const ImVec2& clip_rect_ma
 {
     ImGuiWindow* window = GetCurrentWindow();
     window->DrawList->PushClipRect(clip_rect_min, clip_rect_max, intersect_with_current_clip_rect);
-    window->ClipRect = window->DrawList->_ClipRectStack.back();
+    window->ClipRect = window->DrawList->_ClipRectStack.back().Rect;
 }
 
 void ImGui::PopClipRect()
 {
     ImGuiWindow* window = GetCurrentWindow();
     window->DrawList->PopClipRect();
-    window->ClipRect = window->DrawList->_ClipRectStack.back();
+    window->ClipRect = window->DrawList->_ClipRectStack.back().Rect;
 }
 
 static void ImGui::RenderDimmedBackgroundBehindWindow(ImGuiWindow* window, ImU32 col)
@@ -14232,7 +14232,7 @@ void ImGui::DebugNodeDrawList(ImGuiWindow* window, ImGuiViewportP* viewport, con
         char buf[300];
         ImFormatString(buf, IM_ARRAYSIZE(buf), "DrawCmd:%5d tris, Tex 0x%p, ClipRect (%4.0f,%4.0f)-(%4.0f,%4.0f)",
             pcmd->ElemCount / 3, (void*)(intptr_t)pcmd->TextureId,
-            pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w);
+            pcmd->ClipRect.Rect.x, pcmd->ClipRect.Rect.y, pcmd->ClipRect.Rect.z, pcmd->ClipRect.Rect.w);
         bool pcmd_node_open = TreeNode((void*)(pcmd - draw_list->CmdBuffer.begin()), "%s", buf);
         if (IsItemHovered() && (cfg->ShowDrawCmdMesh || cfg->ShowDrawCmdBoundingBoxes) && fg_draw_list)
             DebugNodeDrawCmdShowMeshAndBoundingBox(fg_draw_list, draw_list, pcmd, cfg->ShowDrawCmdMesh, cfg->ShowDrawCmdBoundingBoxes);
@@ -14294,7 +14294,7 @@ void ImGui::DebugNodeDrawCmdShowMeshAndBoundingBox(ImDrawList* out_draw_list, co
     IM_ASSERT(show_mesh || show_aabb);
 
     // Draw wire-frame version of all triangles
-    ImRect clip_rect = draw_cmd->ClipRect;
+    ImRect clip_rect = draw_cmd->ClipRect.Rect;
     ImRect vtxs_rect(FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX);
     ImDrawListFlags backup_flags = out_draw_list->Flags;
     out_draw_list->Flags &= ~ImDrawListFlags_AntiAliasedLines; // Disable AA on triangle outlines is more readable for very large and thin triangles.

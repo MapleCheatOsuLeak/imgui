@@ -1295,7 +1295,7 @@ void    ImGui::EndTable()
     // Pop clipping rect
     if (!(flags & ImGuiTableFlags_NoClip))
         inner_window->DrawList->PopClipRect();
-    inner_window->ClipRect = inner_window->DrawList->_ClipRectStack.back();
+    inner_window->ClipRect = inner_window->DrawList->_ClipRectStack.back().Rect;
 
     // Draw borders
     if ((flags & ImGuiTableFlags_Borders) != 0)
@@ -1850,7 +1850,7 @@ void ImGui::TableEndRow(ImGuiTable* table)
             // In theory we could call SetWindowClipRectBeforeSetChannel() but since we know TableEndRow() is
             // always followed by a change of clipping rectangle we perform the smallest overwrite possible here.
             if ((table->Flags & ImGuiTableFlags_NoClip) == 0)
-                window->DrawList->_CmdHeader.ClipRect = table->Bg0ClipRectForDrawCmd.ToVec4();
+                window->DrawList->_CmdHeader.ClipRect = ImClipRect(table->Bg0ClipRectForDrawCmd.ToVec4(), 0.f);
             table->DrawSplitter->SetCurrentChannel(window->DrawList, TABLE_DRAW_CHANNEL_BG0);
         }
 
@@ -2461,7 +2461,7 @@ void ImGui::TableMergeDrawChannels(ImGuiTable* table)
                 merge_group->ClipRect = ImRect(+FLT_MAX, +FLT_MAX, -FLT_MAX, -FLT_MAX);
             ImBitArraySetBit(merge_group->ChannelsMask, channel_no);
             merge_group->ChannelsCount++;
-            merge_group->ClipRect.Add(src_channel->_CmdBuffer[0].ClipRect);
+            merge_group->ClipRect.Add(src_channel->_CmdBuffer[0].ClipRect.Rect);
             merge_group_mask |= (1 << merge_group_n);
         }
 
@@ -2538,8 +2538,8 @@ void ImGui::TableMergeDrawChannels(ImGuiTable* table)
                     merge_channels_count--;
 
                     ImDrawChannel* channel = &splitter->_Channels[n];
-                    IM_ASSERT(channel->_CmdBuffer.Size == 1 && merge_clip_rect.Contains(ImRect(channel->_CmdBuffer[0].ClipRect)));
-                    channel->_CmdBuffer[0].ClipRect = merge_clip_rect.ToVec4();
+                    IM_ASSERT(channel->_CmdBuffer.Size == 1 && merge_clip_rect.Contains(ImRect(channel->_CmdBuffer[0].ClipRect.Rect)));
+                    channel->_CmdBuffer[0].ClipRect = ImClipRect(merge_clip_rect.ToVec4(), 0.f);
                     memcpy(dst_tmp++, channel, sizeof(ImDrawChannel));
                 }
             }
@@ -3724,8 +3724,8 @@ void ImGui::SetWindowClipRectBeforeSetChannel(ImGuiWindow* window, const ImRect&
 {
     ImVec4 clip_rect_vec4 = clip_rect.ToVec4();
     window->ClipRect = clip_rect;
-    window->DrawList->_CmdHeader.ClipRect = clip_rect_vec4;
-    window->DrawList->_ClipRectStack.Data[window->DrawList->_ClipRectStack.Size - 1] = clip_rect_vec4;
+    window->DrawList->_CmdHeader.ClipRect = ImClipRect(clip_rect_vec4, 0.f);
+    window->DrawList->_ClipRectStack.Data[window->DrawList->_ClipRectStack.Size - 1] = ImClipRect(clip_rect_vec4, 0.f);
 }
 
 int ImGui::GetColumnIndex()

@@ -217,6 +217,8 @@ struct ImGui_ImplOpenGL3_Data
     GLuint          ShaderHandle;
     GLint           AttribLocationTex;       // Uniforms location
     GLint           AttribLocationProjMtx;
+    GLint           AttribLocationClipRect;
+    GLint           AttribLocationClipRounding;
     GLuint          AttribLocationVtxPos;    // Vertex attributes location
     GLuint          AttribLocationVtxUV;
     GLuint          AttribLocationVtxColor;
@@ -578,13 +580,16 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
             else
             {
                 // Project scissor/clipping rectangles into framebuffer space
-                ImVec2 clip_min((pcmd->ClipRect.x - clip_off.x) * clip_scale.x, (pcmd->ClipRect.y - clip_off.y) * clip_scale.y);
-                ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
+                ImVec2 clip_min((pcmd->ClipRect.Rect.x - clip_off.x) * clip_scale.x, (pcmd->ClipRect.Rect.y - clip_off.y) * clip_scale.y);
+                ImVec2 clip_max((pcmd->ClipRect.Rect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.Rect.w - clip_off.y) * clip_scale.y);
                 if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                     continue;
 
                 // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
                 GL_CALL(glScissor((int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y)));
+
+                GL_CALL(glUniform4f(bd->AttribLocationClipRect, clip_min.x, clip_min.y, clip_max.y - clip_min.y, clip_max.x - clip_min.x));
+                GL_CALL(glUniform1f(bd->AttribLocationClipRounding, pcmd->ClipRect.Rounding));
 
                 // Bind texture, Draw
                 GL_CALL(glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->GetTexID()));
@@ -747,7 +752,7 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
 #endif
 
     // Parse GLSL version string
-    int glsl_version = 130;
+    int glsl_version = 120;
     sscanf(bd->GlslVersionString, "#version %d", &glsl_version);
 
     const GLchar* vertex_shader_glsl_120 =
@@ -812,42 +817,90 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
         "    precision mediump float;\n"
         "#endif\n"
         "uniform sampler2D Texture;\n"
+        "uniform vec4 ClipRect;\n"
+        "uniform float ClipRounding;\n"
         "varying vec2 Frag_UV;\n"
         "varying vec4 Frag_Color;\n"
+        "float roundedRectDistance(vec2 pos, vec2 rectCenter, vec2 rectSize, float rounding)\n"
+        "{\n"
+        "   return length(max(abs(rectCenter - pos) - (rectSize - vec2(rounding * 2.0f)) * 0.5f, 0.0f)) - rounding;\n"
+        "}\n"
         "void main()\n"
         "{\n"
-        "    gl_FragColor = Frag_Color * texture2D(Texture, Frag_UV.st);\n"
+        "   gl_FragColor = Frag_Color * texture2D(Texture, Frag_UV.st);\n"
+        "   if (ClipRounding > 0.0f)\n"
+        "   {\n"
+        "       vec2 clipRectCenter = ClipRect.xy + ClipRect.zw / 2.0f;\n"
+        "       float distance = roundedRectDistance(gl_FragCoord.xy, clipRectCenter, ClipRect.zw, ClipRounding);\n"
+        "       gl_FragColor.a *= clamp(1.0f - (distance + 0.5f), 0.0f, 1.0f);\n"
+        "   }\n"
         "}\n";
 
     const GLchar* fragment_shader_glsl_130 =
         "uniform sampler2D Texture;\n"
+        "uniform vec4 ClipRect;\n"
+        "uniform float ClipRounding;\n"
         "in vec2 Frag_UV;\n"
         "in vec4 Frag_Color;\n"
         "out vec4 Out_Color;\n"
+        "float roundedRectDistance(vec2 pos, vec2 rectCenter, vec2 rectSize, float rounding)\n"
+        "{\n"
+        "   return length(max(abs(rectCenter - pos) - (rectSize - vec2(rounding * 2.0f)) * 0.5f, 0.0f)) - rounding;\n"
+        "}\n"
         "void main()\n"
         "{\n"
-        "    Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   vec4 TexColor = texture(Texture, Frag_UV.st);\n"
+        "   Out_Color = TexColor * Frag_Color;\n"
+        "   if (ClipRounding > 0.0f)\n"
+        "   {\n"
+        "       vec2 clipRectCenter = ClipRect.xy + ClipRect.zw / 2.0f;\n"
+        "       float distance = roundedRectDistance(gl_FragCoord.xy, clipRectCenter, ClipRect.zw, ClipRounding);\n"
+        "       Out_Color.a *= clamp(1.0f - (distance + 0.5f), 0.0f, 1.0f);\n"
+        "   }\n"
         "}\n";
 
     const GLchar* fragment_shader_glsl_300_es =
         "precision mediump float;\n"
         "uniform sampler2D Texture;\n"
+        "uniform vec4 ClipRect;\n"
+        "uniform float ClipRounding;\n"
         "in vec2 Frag_UV;\n"
         "in vec4 Frag_Color;\n"
         "layout (location = 0) out vec4 Out_Color;\n"
+        "float roundedRectDistance(vec2 pos, vec2 rectCenter, vec2 rectSize, float rounding)\n"
+        "{\n"
+        "   return length(max(abs(rectCenter - pos) - (rectSize - vec2(rounding * 2.0f)) * 0.5f, 0.0f)) - rounding;\n"
+        "}\n"
         "void main()\n"
         "{\n"
-        "    Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   if (ClipRounding > 0.0f)\n"
+        "   {\n"
+        "       vec2 clipRectCenter = ClipRect.xy + ClipRect.zw / 2.0f;\n"
+        "       float distance = roundedRectDistance(gl_FragCoord.xy, clipRectCenter, ClipRect.zw, ClipRounding);\n"
+        "       Out_Color.a *= clamp(1.0f - (distance + 0.5f), 0.0f, 1.0f);\n"
+        "   }\n"
         "}\n";
 
     const GLchar* fragment_shader_glsl_410_core =
         "in vec2 Frag_UV;\n"
         "in vec4 Frag_Color;\n"
         "uniform sampler2D Texture;\n"
+        "uniform vec4 ClipRect;\n"
+        "uniform float ClipRounding;\n"
         "layout (location = 0) out vec4 Out_Color;\n"
+        "float roundedRectDistance(vec2 pos, vec2 rectCenter, vec2 rectSize, float rounding)\n"
+        "{\n"
+        "   return length(max(abs(rectCenter - pos) - (rectSize - vec2(rounding * 2.0f)) * 0.5f, 0.0f)) - rounding;\n"
+        "}\n"
         "void main()\n"
         "{\n"
-        "    Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   {\n"
+        "       vec2 clipRectCenter = ClipRect.xy + ClipRect.zw / 2.0f;\n"
+        "       float distance = roundedRectDistance(gl_FragCoord.xy, clipRectCenter, ClipRect.zw, ClipRounding);\n"
+        "       Out_Color.a *= clamp(1.0f - (distance + 0.5f), 0.0f, 1.0f);\n"
+        "   }\n"
         "}\n";
 
     // Select shaders matching our GLSL versions
@@ -901,6 +954,8 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
 
     bd->AttribLocationTex = glGetUniformLocation(bd->ShaderHandle, "Texture");
     bd->AttribLocationProjMtx = glGetUniformLocation(bd->ShaderHandle, "ProjMtx");
+    bd->AttribLocationClipRect = glGetUniformLocation(bd->ShaderHandle, "ClipRect");
+    bd->AttribLocationClipRounding = glGetUniformLocation(bd->ShaderHandle, "ClipRounding");
     bd->AttribLocationVtxPos = (GLuint)glGetAttribLocation(bd->ShaderHandle, "Position");
     bd->AttribLocationVtxUV = (GLuint)glGetAttribLocation(bd->ShaderHandle, "UV");
     bd->AttribLocationVtxColor = (GLuint)glGetAttribLocation(bd->ShaderHandle, "Color");

@@ -316,6 +316,8 @@ typedef void (APIENTRYP PFNGLLINKPROGRAMPROC) (GLuint program);
 typedef void (APIENTRYP PFNGLSHADERSOURCEPROC) (GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length);
 typedef void (APIENTRYP PFNGLUSEPROGRAMPROC) (GLuint program);
 typedef void (APIENTRYP PFNGLUNIFORM1IPROC) (GLint location, GLint v0);
+typedef void (APIENTRYP PFNGLUNIFORM1FPROC) (GLint location, GLfloat v0);
+typedef void (APIENTRYP PFNGLUNIFORM4FPROC) (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
 typedef void (APIENTRYP PFNGLUNIFORMMATRIX4FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 typedef void (APIENTRYP PFNGLVERTEXATTRIBPOINTERPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
 #ifdef GL_GLEXT_PROTOTYPES
@@ -342,6 +344,8 @@ GLAPI void APIENTRY glLinkProgram (GLuint program);
 GLAPI void APIENTRY glShaderSource (GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length);
 GLAPI void APIENTRY glUseProgram (GLuint program);
 GLAPI void APIENTRY glUniform1i (GLint location, GLint v0);
+GLAPI void APIENTRY glUniform1f(GLint location, GLfloat v0);
+GLAPI void APIENTRY glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
 GLAPI void APIENTRY glUniformMatrix4fv (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 GLAPI void APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
 #endif
@@ -525,6 +529,8 @@ union GL3WProcs {
         PFNGLTEXIMAGE2DPROC               TexImage2D;
         PFNGLTEXPARAMETERIPROC            TexParameteri;
         PFNGLUNIFORM1IPROC                Uniform1i;
+        PFNGLUNIFORM1FPROC                Uniform1f;
+        PFNGLUNIFORM4FPROC                Uniform4f;
         PFNGLUNIFORMMATRIX4FVPROC         UniformMatrix4fv;
         PFNGLUSEPROGRAMPROC               UseProgram;
         PFNGLVERTEXATTRIBPOINTERPROC      VertexAttribPointer;
@@ -590,6 +596,8 @@ GL3W_API extern union GL3WProcs imgl3wProcs;
 #define glTexImage2D                      imgl3wProcs.gl.TexImage2D
 #define glTexParameteri                   imgl3wProcs.gl.TexParameteri
 #define glUniform1i                       imgl3wProcs.gl.Uniform1i
+#define glUniform1f                       imgl3wProcs.gl.Uniform1f
+#define glUniform4f                       imgl3wProcs.gl.Uniform4f
 #define glUniformMatrix4fv                imgl3wProcs.gl.UniformMatrix4fv
 #define glUseProgram                      imgl3wProcs.gl.UseProgram
 #define glVertexAttribPointer             imgl3wProcs.gl.VertexAttribPointer
@@ -788,6 +796,8 @@ static const char *proc_names[] = {
     "glTexImage2D",
     "glTexParameteri",
     "glUniform1i",
+    "glUniform1f",
+    "glUniform4f",
     "glUniformMatrix4fv",
     "glUseProgram",
     "glVertexAttribPointer",
